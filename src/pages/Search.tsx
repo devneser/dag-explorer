@@ -20,9 +20,10 @@ import { IconButton } from '@material-ui/core';
 import { ArrowBack } from '@material-ui/icons';
 import ActivityIndicator from '~components/ActivityIndicator';
 import SearchForm from '~features/transactions/SearchForm';
-import { SearchParams, fetchPrice, checkPendingTx } from '~api';
+import { SearchParams, fetchPrice } from '~api';
 import { searchRequest } from '~api/search';
 import { AddressInfo, BlockInfo, TransactionInfo } from '~api/types';
+import { addPendingTx, checkPendingTx } from '~utils/txPending';
 
 export default () => {
   const location = useLocation();
@@ -53,14 +54,25 @@ export default () => {
       searchRequest(term, {
         onTx: (r, pending) => {
           if (pending) {
-            // check if tx is confirmed every 30 mintues
-            const intervalId = setInterval(async () => {
-              const status = await checkPendingTx(r.hash);
-              if (status) {
-                clearInterval(intervalId);
-                setUpdated(new Date().getTime());
-              }
-            }, 30 * 1000);
+            const pendingTx = {
+              timestamp: Date.parse(new Date(r.timestamp).toString()),
+              hash: r.hash,
+              amount: r.amount,
+              receiver: r.receiver,
+              sender: r.sender
+            };
+
+            if (checkPendingTx(pendingTx)) {
+              addPendingTx(pendingTx);
+
+              // check if tx is confirmed every 30 seconds
+              const intervalId = setInterval(() => {
+                if (checkPendingTx(pendingTx)) {
+                  clearInterval(intervalId);
+                  setUpdated(new Date().getTime());
+                }
+              }, 30 * 1000);
+            }
           }
           setBlock(null);
           setAddress(null);
